@@ -1,0 +1,95 @@
+---
+title: "Seurat_Tutorial_1"
+author: "sidwekhande"
+date: "1/12/2020"
+output: pdf_document
+---
+
+```{r message=FALSE}
+library(dplyr)
+library(Seurat)
+
+pbmc.data <- Read10X(data.dir = "/Users/siddarth/Desktop/datasets/filtered_gene_bc_matrices/hg19/")
+pbmc <- CreateSeuratObject(counts = pbmc.data, project = "pbmc3k", min.cells = 3, min.features = 200)
+pbmc
+```
+
+```{r}
+#QC Visualizations 
+
+pbmc[["percent.mt"]] <- PercentageFeatureSet(pbmc, pattern = "^MT-")
+VlnPlot(pbmc, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+```
+
+
+```{r}
+#Subset
+pbmc <- subset(pbmc, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 5)
+
+#Normalize by total expression, multiply by 10,000 and log transform
+pbmc <- NormalizeData(pbmc, normalization.method = "LogNormalize", scale.factor = 10000)
+
+#Following is normalization with default parameters
+#pbmc <- NormalizeData(pbmc)
+
+```
+
+```{r}
+#Feature Selection
+pbmc <- FindVariableFeatures(pbmc, selection.method = "vst", nfeatures = 2000)
+
+# Identify the 10 most highly variable genes
+top10 <- head(VariableFeatures(pbmc), 10)
+
+# plot variable features with and without labels
+plot1 <- VariableFeaturePlot(pbmc)
+plot2 <- LabelPoints(plot = plot1, points = top10, repel = TRUE)
+CombinePlots(plots = list(plot1, plot2))
+
+```
+
+```{r}
+#Scaling data
+all.genes <- rownames(pbmc)
+pbmc <- ScaleData(pbmc, features = all.genes)
+pbmc <- RunPCA(pbmc, features = VariableFeatures(object = pbmc))
+DimHeatmap(pbmc, dims = 1:15, cells = 500, balanced = TRUE)
+```
+
+```{r}
+#Takes a long time - can be used to find significant PCs for UMAP. Can be sort of determined from heatmap
+pbmc <- JackStraw(pbmc, num.replicate = 100)
+pbmc <- ScoreJackStraw(pbmc, dims = 1:20)
+JackStrawPlot(pbmc, dims = 1:15)
+
+```
+
+```{r}
+pbmc <- FindNeighbors(pbmc, dims = 1:10)
+pbmc <- FindClusters(pbmc, resolution = 0.5)
+pbmc <- RunUMAP(pbmc, dims = 1:10)
+# note that you can set `label = TRUE` or use the LabelClusters function to help label
+# individual clusters
+DimPlot(pbmc, reduction = "umap")
+
+```
+
+```{r warning=FALSE }
+#Or even simpler, with Seurat v3, use scTransform function, which normalizes, scales (shifts) and feature selects the top 3000 while accounting for unwanted sources of variation. 
+
+pbmc.data <- Read10X(data.dir = "/Users/siddarth/Desktop/datasets/filtered_gene_bc_matrices/hg19/")
+pbmc <- CreateSeuratObject(counts = pbmc.data, project = "pbmc3k", min.cells = 3, min.features = 200)
+pbmc
+
+pbmc[["percent.mt"]] <- PercentageFeatureSet(pbmc, pattern = "^MT-")
+VlnPlot(pbmc, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+pbmc <- SCTransform(pbmc, vars.to.regress = "percent.mt", verbose = FALSE)
+
+pbmc <- RunPCA(pbmc, verbose = FALSE)
+pbmc <- RunUMAP(pbmc, dims = 1:30, verbose = FALSE)
+
+pbmc <- FindNeighbors(pbmc, dims = 1:30, verbose = FALSE)
+pbmc <- FindClusters(pbmc, verbose = FALSE)
+DimPlot(pbmc, label = TRUE) + NoLegend()
+
+```
